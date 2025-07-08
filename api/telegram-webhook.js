@@ -1,9 +1,12 @@
 // api/telegram-webhook.js
 import fetch from 'node-fetch';
 
-// Ambil token bot dan chat ID owner dari Environment Variables Vercel
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID; // ID chat owner yang sah
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+
+// Ambil VERCEL_URL dari environment variable
+// Ini adalah URL deployment Anda, contoh: https://nama-proyek-anda.vercel.app
+const VERCEL_BASE_URL = process.env.VERCEL_URL; 
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -13,20 +16,17 @@ export default async function handler(req, res) {
   const { message } = req.body;
 
   if (!message || !message.text) {
-    return res.status(200).json({ success: true, message: 'No message text or invalid update.' }); // Ignore non-text messages
+    return res.status(200).json({ success: true, message: 'No message text or invalid update.' });
   }
 
   const chatId = message.chat.id;
   const text = message.text;
-  const fromId = message.from.id; // ID pengguna yang mengirim pesan
+  const fromId = message.from.id;
 
-  // --- Verifikasi Owner ---
   if (fromId.toString() !== TELEGRAM_CHAT_ID.toString()) {
-    // Jika bukan owner, kirim pesan peringatan atau abaikan
     await sendTelegramMessage(chatId, 'Maaf, Anda tidak memiliki izin untuk menggunakan perintah ini.');
     return res.status(200).json({ success: false, message: 'Unauthorized user.' });
   }
-  // --- Akhir Verifikasi Owner ---
 
   console.log(`Received message from ${chatId}: ${text}`);
 
@@ -36,7 +36,8 @@ export default async function handler(req, res) {
     const customKey = text.substring('/addkey'.length).trim();
     try {
       // Panggil Serverless Function manage-access-keys untuk menambah key
-      const addKeyResponse = await fetch('/api/manage-access-keys', {
+      // GUNAKAN VERCEL_BASE_URL DI SINI
+      const addKeyResponse = await fetch(`${VERCEL_BASE_URL}/api/manage-access-keys`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: customKey || undefined, createdByTelegramId: fromId }),
@@ -55,7 +56,8 @@ export default async function handler(req, res) {
   } else if (text.startsWith('/listkeys')) {
     try {
       // Panggil Serverless Function manage-access-keys untuk melihat daftar key
-      const listKeysResponse = await fetch(`/api/manage-access-keys?requestedByTelegramId=${fromId}`, {
+      // GUNAKAN VERCEL_BASE_URL DI SINI
+      const listKeysResponse = await fetch(`${VERCEL_BASE_URL}/api/manage-access-keys?requestedByTelegramId=${fromId}`, {
         method: 'GET',
       });
       const listKeysData = await listKeysResponse.json();
@@ -82,7 +84,8 @@ export default async function handler(req, res) {
     } else {
       try {
         // Panggil Serverless Function manage-access-keys untuk menghapus key
-        const removeKeyResponse = await fetch('/api/manage-access-keys', {
+        // GUNAKAN VERCEL_BASE_URL DI SINI
+        const removeKeyResponse = await fetch(`${VERCEL_BASE_URL}/api/manage-access-keys`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key: keyToRemove, deletedByTelegramId: fromId }),
@@ -101,7 +104,6 @@ export default async function handler(req, res) {
     }
   }
 
-  // Kirim balasan ke Telegram
   await sendTelegramMessage(chatId, responseMessage);
 
   return res.status(200).json({ success: true, message: 'Webhook processed.' });
@@ -118,7 +120,7 @@ async function sendTelegramMessage(chatId, messageText) {
       body: JSON.stringify({
         chat_id: chatId,
         text: messageText,
-        parse_mode: 'HTML', // Untuk formatting bold, code, dll.
+        parse_mode: 'HTML',
       }),
     });
     const data = await response.json();
