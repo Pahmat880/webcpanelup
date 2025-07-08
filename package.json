@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Web app to create Pterodactyl panels with Telegram notification and Access Key management.",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
