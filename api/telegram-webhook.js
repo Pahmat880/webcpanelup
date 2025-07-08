@@ -4,9 +4,12 @@ import fetch from 'node-fetch';
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// Ambil VERCEL_URL dari environment variable
-// Ini adalah URL deployment Anda, contoh: https://nama-proyek-anda.vercel.app
-const VERCEL_BASE_URL = process.env.VERCEL_URL; 
+// Pastikan VERCEL_URL diawali dengan https://
+// VERCEL_URL kadang hanya berisi hostname, kadang lengkap. Pastikan selalu HTTPS.
+let VERCEL_BASE_URL = process.env.VERCEL_URL; 
+if (VERCEL_BASE_URL && !VERCEL_BASE_URL.startsWith('http')) {
+    VERCEL_BASE_URL = `https://${VERCEL_BASE_URL}`; // Tambahkan https:// jika belum ada
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -35,9 +38,7 @@ export default async function handler(req, res) {
   if (text.startsWith('/addkey')) {
     const customKey = text.substring('/addkey'.length).trim();
     try {
-      // Panggil Serverless Function manage-access-keys untuk menambah key
-      // GUNAKAN VERCEL_BASE_URL DI SINI
-      const addKeyResponse = await fetch(`${VERCEL_BASE_URL}/api/manage-access-keys`, {
+      const addKeyResponse = await fetch(`${VERCEL_BASE_URL}/api/manage-access-keys`, { // Ini yang error
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: customKey || undefined, createdByTelegramId: fromId }),
@@ -55,9 +56,7 @@ export default async function handler(req, res) {
     }
   } else if (text.startsWith('/listkeys')) {
     try {
-      // Panggil Serverless Function manage-access-keys untuk melihat daftar key
-      // GUNAKAN VERCEL_BASE_URL DI SINI
-      const listKeysResponse = await fetch(`${VERCEL_BASE_URL}/api/manage-access-keys?requestedByTelegramId=${fromId}`, {
+      const listKeysResponse = await fetch(`${VERCEL_BASE_URL}/api/manage-access-keys?requestedByTelegramId=${fromId}`, { // Ini yang error
         method: 'GET',
       });
       const listKeysData = await listKeysResponse.json();
@@ -83,9 +82,7 @@ export default async function handler(req, res) {
       responseMessage = 'Mohon sertakan Access Key yang ingin dihapus. Contoh: /removekey 123abc456def';
     } else {
       try {
-        // Panggil Serverless Function manage-access-keys untuk menghapus key
-        // GUNAKAN VERCEL_BASE_URL DI SINI
-        const removeKeyResponse = await fetch(`${VERCEL_BASE_URL}/api/manage-access-keys`, {
+        const removeKeyResponse = await fetch(`${VERCEL_BASE_URL}/api/manage-access-keys`, { // Ini yang error
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key: keyToRemove, deletedByTelegramId: fromId }),
