@@ -1,5 +1,5 @@
 // api/manage-access-keys.js
-import { connectToDatabase } from '../utils/db';
+import { connectToDatabase } from '../utils/db.js';
 import crypto from 'crypto'; // Untuk generate key acak
 
 export default async function handler(req, res) {
