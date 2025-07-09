@@ -3,7 +3,7 @@
 import fetch from 'node-fetch'; 
 import { connectToDatabase } from '../utils/db.js'; // Pastikan ada .js
 
-// Fungsi Helper untuk Escape HTML (tetap di sini)
+// Fungsi Helper untuk Escape HTML
 function escapeHTML(str) {
   return str.replace(/[&<>"']/g, function(tag) {
     var charsToReplace = {
@@ -40,6 +40,8 @@ if (!VERCEL_BASE_URL || !VERCEL_BASE_URL.startsWith('http')) {
     console.error("VERCEL_BASE_URL environment variable is missing or invalid in create-panel.js. Please set it in Vercel Dashboard (e.g., https://your-project.vercel.app)");
     // Ini akan menyebabkan fungsi crash jika variabel tidak diset, yang diinginkan
     // agar Anda tahu ada masalah konfigurasi.
+    // Jika ini adalah alasan error, Vercel akan menampilkan logs ini
+    // dan crash dengan "FUNCTION_INVOCATION_FAILED"
 }
 
 
@@ -101,3 +103,46 @@ export default async function handler(req, res) {
       const escapedDomain = escapeHTML(apiData.result.domain);
 
       const notificationMessage = `
+✅ <b>Panel Baru Dibuat!</b>
+------------------------------
+👤 Username: <b>${escapedUsername}</b>
+🔑 Password: <b>${escapedPassword}</b>
+📦 Paket: <b>${hostingPackage.toUpperCase()}</b>
+⚙️ Tipe Panel: <b>${panelType.toUpperCase()}</b>
+🔗 Domain: ${escapedDomain}
+------------------------------
+<b>Access Key Digunakan:</b> <code>${accessKeyUsed}</code>
+ID User: ${apiData.result.id_user}
+Server ID: ${apiData.result.id_server}
+`;
+      
+      // Panggil Serverless Function Notifikasi Telegram
+      await fetch(`${VERCEL_BASE_URL}/api/send-telegram-notification`, { 
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message: notificationMessage }),
+      })
+      .then(notifRes => notifRes.json())
+      .then(notifData => {
+          if (!notifData.success) {
+              console.warn('Failed to send Telegram notification:', notifData.message);
+          } else {
+              console.log('Telegram notification sent successfully.');
+          }
+      })
+      .catch(notifError => {
+          console.error('Error calling Telegram notification API:', notifError);
+      });
+      // --- Akhir Notifikasi Telegram ---
+
+      res.status(200).json(apiData);
+    } else {
+      res.status(apiResponse.status || 500).json(apiData || { status: false, message: 'Failed to create server via external API.' });
+    }
+  } catch (error) {
+    console.error('Error in Vercel Serverless Function:', error);
+    res.status(500).json({ status: false, message: `Internal Server Error: ${error.message}` });
+  }
+}
