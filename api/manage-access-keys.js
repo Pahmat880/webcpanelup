@@ -1,96 +1,92 @@
 // api/manage-access-keys.js
+
 import { connectToDatabase } from '../utils/db.js';
-import crypto from 'crypto'; // Untuk generate key acak
+import crypto from 'crypto';
+
+console.log('manage-access-keys.js: Function loaded');
 
 export default async function handler(req, res) {
-  const db = await connectToDatabase();
-  const collection = db.collection('accessKeys'); // Nama koleksi untuk access keys
+  console.log(`manage-access-keys.js: Received ${req.method} request.`);
 
-  // Owner ID Telegram dari environment variable untuk otorisasi
-  const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+  try {
+    const db = await connectToDatabase();
+    console.log('manage-access-keys.js: Connected to DB.');
+    const collection = db.collection('accessKeys');
 
-  // Middleware sederhana untuk otorisasi owner (hanya untuk panggilan internal dari webhook)
-  // Owner akan diverifikasi di webhook, jadi ini lebih untuk memastikan panggilan dari sumber yang benar
-  const authorizeOwner = (ownerId) => {
-    return ownerId && ownerId.toString() === TELEGRAM_CHAT_ID.toString();
-  };
+    const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+    const authorizeOwner = (ownerId) => {
+      return ownerId && ownerId.toString() === TELEGRAM_CHAT_ID.toString();
+    };
 
-  if (req.method === 'POST') {
-    // Menambah Access Key baru
-    const { key, createdByTelegramId } = req.body;
+    if (req.method === 'POST') {
+      const { key, createdByTelegramId, panelTypeRestriction } = req.body; // <-- Tambahkan panelTypeRestriction
+      console.log('manage-access-keys.js: Processing POST request.');
 
-    if (!authorizeOwner(createdByTelegramId)) {
-      return res.status(403).json({ success: false, message: 'Unauthorized access. Only owner can add keys.' });
-    }
-
-    const newKey = key || crypto.randomBytes(16).toString('hex'); // Generate random key jika tidak diberikan
-    
-    try {
-      // Pastikan key belum ada
-      const existingKey = await collection.findOne({ key: newKey });
-      if (existingKey) {
-        return res.status(409).json({ success: false, message: 'Access Key already exists. Try another one or generate.' });
+      if (!authorizeOwner(createdByTelegramId)) {
+        return res.status(403).json({ success: false, message: 'Unauthorized: Only owner can create keys.' });
       }
+
+      const newKey = key || crypto.randomBytes(16).toString('hex'); // Generate random key if not provided
+      const existingKey = await collection.findOne({ key: newKey });
+
+      if (existingKey) {
+        return res.status(409).json({ success: false, message: 'Access Key already exists.' });
+      }
+
+      // Validasi panelTypeRestriction
+      const validRestrictions = ['public', 'private', 'both'];
+      const finalPanelTypeRestriction = panelTypeRestriction && validRestrictions.includes(panelTypeRestriction.toLowerCase())
+                                          ? panelTypeRestriction.toLowerCase()
+                                          : 'both'; // Default ke 'both'
 
       const result = await collection.insertOne({
         key: newKey,
         isActive: true,
-        createdAt: new Date(),
-        createdByTelegramId: createdByTelegramId,
+        createdAt: new Date().toISOString(),
         usageCount: 0,
-        lastUsed: null,
+        createdByTelegramId: createdByTelegramId,
+        panelTypeRestriction: finalPanelTypeRestriction // <-- Simpan restriction
       });
 
-      return res.status(201).json({ success: true, message: 'Access Key added successfully.', key: newKey, id: result.insertedId });
-    } catch (error) {
-      console.error('Error adding access key:', error);
-      return res.status(500).json({ success: false, message: 'Failed to add access key.', error: error.message });
-    }
-  } else if (req.method === 'GET') {
-    // Melihat daftar Access Key
-    const { requestedByTelegramId } = req.query; // Ambil dari query untuk GET
+      if (result.acknowledged) {
+        return res.status(201).json({ success: true, message: 'Access Key created successfully.', key: newKey, panelTypeRestriction: finalPanelTypeRestriction }); // <-- Sertakan restriction di respons
+      } else {
+        return res.status(500).json({ success: false, message: 'Failed to create Access Key.' });
+      }
+    } else if (req.method === 'GET') {
+      const { requestedByTelegramId } = req.query;
+      console.log('manage-access-keys.js: Processing GET request.');
 
-    if (!authorizeOwner(requestedByTelegramId)) {
-      return res.status(403).json({ success: false, message: 'Unauthorized access. Only owner can list keys.' });
-    }
+      if (!authorizeOwner(requestedByTelegramId)) {
+        return res.status(403).json({ success: false, message: 'Unauthorized: Only owner can list keys.' });
+      }
 
-    try {
-      const keys = await collection.find({}).toArray();
-      // Jangan kirim semua detail sensitif jika tidak diperlukan oleh owner
-      const simplifiedKeys = keys.map(k => ({
-        key: k.key,
-        isActive: k.isActive,
-        createdAt: k.createdAt.toISOString().split('T')[0], // Format tanggal lebih rapi
-        usageCount: k.usageCount,
-      }));
-      return res.status(200).json({ success: true, keys: simplifiedKeys });
-    } catch (error) {
-      console.error('Error listing access keys:', error);
-      return res.status(500).json({ success: false, message: 'Failed to list access keys.', error: error.message });
-    }
-  } else if (req.method === 'DELETE') {
-    // Menghapus Access Key
-    const { key, deletedByTelegramId } = req.body;
+      const keys = await collection.find({}).project({ _id: 0, key: 1, isActive: 1, createdAt: 1, usageCount: 1, panelTypeRestriction: 1 }).toArray(); // <-- Sertakan panelTypeRestriction
+      return res.status(200).json({ success: true, keys: keys });
+    } else if (req.method === 'DELETE') {
+      const { key, deletedByTelegramId } = req.body;
+      console.log('manage-access-keys.js: Processing DELETE request.');
 
-    if (!authorizeOwner(deletedByTelegramId)) {
-      return res.status(403).json({ success: false, message: 'Unauthorized access. Only owner can delete keys.' });
-    }
+      if (!authorizeOwner(deletedByTelegramId)) {
+        return res.status(403).json({ success: false, message: 'Unauthorized: Only owner can delete keys.' });
+      }
+      if (!key) {
+        return res.status(400).json({ success: false, message: 'Access Key is required for deletion.' });
+      }
 
-    if (!key) {
-      return res.status(400).json({ success: false, message: 'Access Key to delete is required.' });
-    }
-
-    try {
       const result = await collection.deleteOne({ key: key });
-      if (result.deletedCount === 0) {
+
+      if (result.deletedCount === 1) {
+        return res.status(200).json({ success: true, message: 'Access Key deleted successfully.' });
+      } else {
         return res.status(404).json({ success: false, message: 'Access Key not found.' });
       }
-      return res.status(200).json({ success: true, message: 'Access Key deleted successfully.' });
-    } catch (error) {
-      console.error('Error deleting access key:', error);
-      return res.status(500).json({ success: false, message: 'Failed to delete access key.', error: error.message });
+    } else {
+      console.log(`manage-access-keys.js: Unsupported method: ${req.method}`);
+      return res.status(405).json({ success: false, message: 'Method Not Allowed.' });
     }
-  } else {
-    return res.status(405).json({ success: false, message: 'Method Not Allowed.' });
+  } catch (error) {
+    console.error('manage-access-keys.js: CRITICAL ERROR IN HANDLER:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error in manage-access-keys.', error: error.message });
   }
 }
