@@ -1,5 +1,5 @@
 // api/validate-access-key.js
-import { connectToDatabase } from '../utils/db'; // Import koneksi database
+import { connectToDatabase } from '../utils/db.js'; // Import koneksi database
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
