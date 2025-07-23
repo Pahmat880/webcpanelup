@@ -18,7 +18,8 @@ function escapeHTML(str) {
 }
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_IDS = process.env.TELEGRAM_CHAT_IDS; // Variabel untuk multiple admin IDs
+// Ganti TELEGRAM_CHAT_ID dengan TELEGRAM_CHAT_IDS
+const TELEGRAM_CHAT_IDS = process.env.TELEGRAM_CHAT_IDS; // Variabel baru untuk multiple admin IDs
 const VERCEL_BASE_URL = process.env.VERCEL_BASE_URL;
 
 if (!VERCEL_BASE_URL || !VERCEL_BASE_URL.startsWith('http')) {
@@ -26,6 +27,7 @@ if (!VERCEL_BASE_URL || !VERCEL_BASE_URL.startsWith('http')) {
 }
 
 // Pisahkan string TELEGRAM_CHAT_IDS menjadi array, dan trim setiap ID
+// Ini akan membuat array ID yang diizinkan untuk admin
 const AUTHORIZED_ADMIN_IDS = TELEGRAM_CHAT_IDS ? TELEGRAM_CHAT_IDS.split(',').map(id => id.trim()) : [];
 
 
@@ -45,11 +47,13 @@ export default async function handler(req, res) {
 
   const chatId = message.chat.id; // ID chat/grup tempat pesan dikirim
   const text = message.text;
-  const fromId = message.from.id;
+  const fromId = message.from.id; // ID pengguna yang mengirim pesan
 
 
-  // --- Verifikasi Owner (Mendukung Multiple Admin IDs) ---
-  // Periksa apakah fromId (pengirim pesan) atau chatId (jika pesan dari grup) ada di daftar admin yang diizinkan
+  // --- Verifikasi Owner (Mendukung Multi Admin IDs) ---
+  // Periksa apakah fromId (ID pengguna yang mengirim pesan)
+  // ATAU chatId (ID chat/grup, jika pesan datang dari grup)
+  // ada di daftar AUTHORIZED_ADMIN_IDS
   if (!AUTHORIZED_ADMIN_IDS.includes(fromId.toString()) && !AUTHORIZED_ADMIN_IDS.includes(chatId.toString())) {
     console.warn(`[Webhook] Unauthorized access attempt from chatId: ${chatId} (fromId: ${fromId}), text: ${text}`);
     await sendTelegramMessage(chatId, 'Maaf, Anda tidak memiliki izin untuk menggunakan perintah ini.');
@@ -86,20 +90,20 @@ Berikut adalah daftar perintah yang bisa Anda gunakan:
 Panel Creator Anda: ${VERCEL_BASE_URL}
 `;
   } else if (text.startsWith('/addkey')) {
-    const args = text.substring('/addkey'.length).trim().split(/\s+/).filter(arg => arg !== ''); // Filter arg kosong
+    const args = text.substring('/addkey'.length).trim().split(/\s+/).filter(arg => arg !== '');
     let customKey = undefined;
-    let panelTypeRestriction = 'both'; // Default restriction
+    let panelTypeRestriction = 'both';
 
     if (args.length > 0) {
         const lastArg = args[args.length - 1].toLowerCase();
         const validRestrictions = ['public', 'private', 'both'];
         if (validRestrictions.includes(lastArg)) {
             panelTypeRestriction = lastArg;
-            if (args.length > 1) { // Jika ada arg lain sebelum restriction
-                customKey = args.slice(0, args.length - 1).join(' '); // Gabungkan sisa arg sebagai key
+            if (args.length > 1) {
+                customKey = args.slice(0, args.length - 1).join(' ');
             }
         } else {
-            customKey = args.join(' '); // Jika tidak ada restriction, semua arg adalah custom key
+            customKey = args.join(' ');
         }
     }
     
@@ -114,7 +118,7 @@ Panel Creator Anda: ${VERCEL_BASE_URL}
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             key: customKey,
-            createdByTelegramId: fromId,
+            createdByTelegramId: fromId, // Mengirim fromId sebagai pembuat key
             panelTypeRestriction: panelTypeRestriction
         }),
       });
@@ -177,7 +181,7 @@ Panel Creator Anda: ${VERCEL_BASE_URL}
         const removeKeyResponse = await fetch(`${VERCEL_BASE_URL}/api/manage-access-keys`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: keyToRemove, deletedByTelegramId: fromId }),
+          body: JSON.stringify({ key: keyToRemove, deletedByTelegramId: fromId }), // Mengirim fromId sebagai penghapus key
         });
         const removeKeyData = await removeKeyResponse.json();
 
@@ -226,4 +230,4 @@ async function sendTelegramMessage(chatId, messageText) {
   } catch (error) {
     console.error('Error sending message via Telegram API:', error);
   }
-    }
+}
