@@ -14,42 +14,59 @@ export default async function handler(req, res) {
 
   // Ambil token bot dan chat ID dari Environment Variables Vercel
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-  const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_IDS;
+  const TELEGRAM_CHAT_IDS_STRING = process.env.TELEGRAM_CHAT_IDS; // Gunakan string untuk mendapatkan semua ID
 
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-    console.error('Telegram bot token or chat ID is not set in environment variables.');
-    return res.status(500).json({ success: false, message: 'Server configuration error: Telegram credentials missing.' });
+  // Pastikan token bot dan string ID tidak kosong
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_IDS_STRING) {
+    console.error('Telegram bot token or chat IDs string is not set in environment variables.');
+    return res.status(500).json({ success: false, message: 'Server configuration error: Telegram credentials or chat IDs missing.' });
   }
+
+  // Pisahkan string TELEGRAM_CHAT_IDS_STRING menjadi array ID
+  const TELEGRAM_CHAT_IDS_ARRAY = TELEGRAM_CHAT_IDS_STRING.split(',').map(id => id.trim());
 
   if (!message) {
     return res.status(400).json({ success: false, message: 'Message content is required.' });
   }
 
   const telegramApiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+  let allNotificationsSuccessful = true;
+  let errors = [];
 
-  try {
-    const telegramResponse = await fetch(telegramApiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: message,
-        parse_mode: 'HTML', // Opsional: Untuk memungkinkan formatting HTML di pesan Telegram
-      }),
-    });
+  // Iterate melalui setiap chat ID dan kirim pesan
+  for (const chatId of TELEGRAM_CHAT_IDS_ARRAY) {
+    try {
+      const telegramResponse = await fetch(telegramApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chat_id: chatId, // Kirim ke satu ID dalam iterasi
+          text: message,
+          parse_mode: 'HTML',
+        }),
+      });
 
-    const telegramData = await telegramResponse.json();
+      const telegramData = await telegramResponse.json();
 
-    if (telegramResponse.ok && telegramData.ok) {
-      return res.status(200).json({ success: true, message: 'Notification sent successfully.' });
-    } else {
-      console.error('Failed to send Telegram notification:', telegramData);
-      return res.status(500).json({ success: false, message: 'Failed to send Telegram notification.', telegramError: telegramData.description });
+      if (!telegramResponse.ok || !telegramData.ok) {
+        allNotificationsSuccessful = false;
+        const errorDetail = `Failed to send notification to chat ID ${chatId}: ${telegramData.description || 'Unknown error'}`;
+        console.error(errorDetail);
+        errors.push(errorDetail);
+      }
+    } catch (error) {
+      allNotificationsSuccessful = false;
+      const errorDetail = `Error sending Telegram notification to chat ID ${chatId}: ${error.message}`;
+      console.error(errorDetail);
+      errors.push(errorDetail);
     }
-  } catch (error) {
-    console.error('Error sending Telegram notification:', error);
-    return res.status(500).json({ success: false, message: `Internal server error: ${error.message}` });
+  }
+
+  if (allNotificationsSuccessful) {
+    return res.status(200).json({ success: true, message: 'Notifications sent to all authorized chat IDs.' });
+  } else {
+    return res.status(500).json({ success: false, message: 'Failed to send notifications to one or more chat IDs.', details: errors });
   }
 }
