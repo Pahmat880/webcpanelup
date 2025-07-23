@@ -18,8 +18,7 @@ function escapeHTML(str) {
 }
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-// Ganti TELEGRAM_CHAT_ID dengan TELEGRAM_CHAT_IDS
-const TELEGRAM_CHAT_IDS = process.env.TELEGRAM_CHAT_IDS; // Variabel baru untuk multiple admin IDs
+const TELEGRAM_CHAT_IDS = process.env.TELEGRAM_CHAT_IDS; // Variabel untuk multiple admin IDs
 const VERCEL_BASE_URL = process.env.VERCEL_BASE_URL;
 
 if (!VERCEL_BASE_URL || !VERCEL_BASE_URL.startsWith('http')) {
@@ -27,7 +26,6 @@ if (!VERCEL_BASE_URL || !VERCEL_BASE_URL.startsWith('http')) {
 }
 
 // Pisahkan string TELEGRAM_CHAT_IDS menjadi array, dan trim setiap ID
-// Ini akan membuat array ID yang diizinkan untuk admin
 const AUTHORIZED_ADMIN_IDS = TELEGRAM_CHAT_IDS ? TELEGRAM_CHAT_IDS.split(',').map(id => id.trim()) : [];
 
 
@@ -56,12 +54,12 @@ export default async function handler(req, res) {
   // ada di daftar AUTHORIZED_ADMIN_IDS
   if (!AUTHORIZED_ADMIN_IDS.includes(fromId.toString()) && !AUTHORIZED_ADMIN_IDS.includes(chatId.toString())) {
     console.warn(`[Webhook] Unauthorized access attempt from chatId: ${chatId} (fromId: ${fromId}), text: ${text}`);
-    await sendTelegramMessage(chatId, 'Maaf, Anda tidak memiliki izin untuk menggunakan perintah ini.');
+    await sendTelegramMessage(chatId, 'Maaf, Anda tidak memiliki izin untuk menggunakan bot ini.');
     return res.status(200).json({ success: false, message: 'Unauthorized user.' });
   }
   // --- Akhir Verifikasi Owner ---
 
-  console.log(`[Webhook] Processing command from owner (${chatId}): ${text}`);
+  console.log(`[Webhook] Processing command from authorized user (${chatId}): ${text}`);
 
   let responseMessage = 'Perintah tidak dikenal.'; 
 
@@ -118,7 +116,7 @@ Panel Creator Anda: ${VERCEL_BASE_URL}
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             key: customKey,
-            createdByTelegramId: fromId, // Mengirim fromId sebagai pembuat key
+            createdByTelegramId: fromId.toString(), // Mengirim fromId sebagai string
             panelTypeRestriction: panelTypeRestriction
         }),
       });
@@ -143,7 +141,7 @@ Panel Creator Anda: ${VERCEL_BASE_URL}
   } else if (text.startsWith('/listkeys')) {
     try {
       console.log("[Webhook] Calling /api/manage-access-keys (GET) for /listkeys.");
-      const listKeysResponse = await fetch(`${VERCEL_BASE_URL}/api/manage-access-keys?requestedByTelegramId=${fromId}`, {
+      const listKeysResponse = await fetch(`${VERCEL_BASE_URL}/api/manage-access-keys?requestedByTelegramId=${fromId.toString()}`, { // Mengirim fromId sebagai string
         method: 'GET',
       });
       const listKeysData = await listKeysResponse.json();
@@ -154,7 +152,7 @@ Panel Creator Anda: ${VERCEL_BASE_URL}
           responseMessage += `<b>${index + 1}.</b> <code>${escapeHTML(k.key)}</code>\n`;
           responseMessage += `   Status: <b>${k.isActive ? 'Aktif ✅' : 'Nonaktif ❌'}</b>\n`;
           responseMessage += `   Batasan: <b>${escapeHTML(k.panelTypeRestriction || 'both')}</b>\n`;
-          responseMessage += `   Dibuat: ${escapeHTML(k.createdAt.split('T')[0])}\n`; // Ambil hanya tanggal
+          responseMessage += `   Dibuat: ${escapeHTML(k.createdAt.split('T')[0])}\n`;
           responseMessage += `   Digunakan: ${k.usageCount} kali\n`;
           if (index < listKeysData.keys.length - 1) {
             responseMessage += `------------------------------------\n`;
@@ -174,14 +172,14 @@ Panel Creator Anda: ${VERCEL_BASE_URL}
   } else if (text.startsWith('/removekey')) {
     const keyToRemove = text.substring('/removekey'.length).trim();
     if (!keyToRemove) {
-      responseMessage = 'Mohon sertakan Access Key yang ingin dihapus. Contoh: /removekey <code>myCustomKey</code>';
+      responseMessage = 'Mohon sertakan Access Key yang ingin dihapus. Contoh: <code>/removekey myCustomKey</code>';
     } else {
       try {
         console.log(`[Webhook] Calling /api/manage-access-keys (DELETE) for /removekey. Key: ${keyToRemove}`);
         const removeKeyResponse = await fetch(`${VERCEL_BASE_URL}/api/manage-access-keys`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: keyToRemove, deletedByTelegramId: fromId }), // Mengirim fromId sebagai penghapus key
+          body: JSON.stringify({ key: keyToRemove, deletedByTelegramId: fromId.toString() }), // Mengirim fromId sebagai string
         });
         const removeKeyData = await removeKeyResponse.json();
 
@@ -230,4 +228,4 @@ async function sendTelegramMessage(chatId, messageText) {
   } catch (error) {
     console.error('Error sending message via Telegram API:', error);
   }
-}
+                                 }
