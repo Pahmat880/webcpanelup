@@ -18,12 +18,16 @@ function escapeHTML(str) {
 }
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const TELEGRAM_CHAT_IDS = process.env.TELEGRAM_CHAT_IDS; // Variabel untuk multiple admin IDs
 const VERCEL_BASE_URL = process.env.VERCEL_BASE_URL;
 
 if (!VERCEL_BASE_URL || !VERCEL_BASE_URL.startsWith('http')) {
     console.error("VERCEL_BASE_URL environment variable is missing or invalid. Please set it in Vercel Dashboard (e.g., https://your-project.vercel.app)");
 }
+
+// Pisahkan string TELEGRAM_CHAT_IDS menjadi array, dan trim setiap ID
+const AUTHORIZED_ADMIN_IDS = TELEGRAM_CHAT_IDS ? TELEGRAM_CHAT_IDS.split(',').map(id => id.trim()) : [];
+
 
 export default async function handler(req, res) {
   console.log(`[Webhook] Received ${req.method} request.`);
@@ -39,13 +43,15 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, message: 'No message text or invalid update.' });
   }
 
-  const chatId = message.chat.id;
+  const chatId = message.chat.id; // ID chat/grup tempat pesan dikirim
   const text = message.text;
   const fromId = message.from.id;
 
-  // --- Verifikasi Owner ---
-  if (fromId.toString() !== TELEGRAM_CHAT_ID.toString()) {
-    console.warn(`[Webhook] Unauthorized access attempt from chatId: ${chatId}, text: ${text}`);
+
+  // --- Verifikasi Owner (Mendukung Multiple Admin IDs) ---
+  // Periksa apakah fromId (pengirim pesan) atau chatId (jika pesan dari grup) ada di daftar admin yang diizinkan
+  if (!AUTHORIZED_ADMIN_IDS.includes(fromId.toString()) && !AUTHORIZED_ADMIN_IDS.includes(chatId.toString())) {
+    console.warn(`[Webhook] Unauthorized access attempt from chatId: ${chatId} (fromId: ${fromId}), text: ${text}`);
     await sendTelegramMessage(chatId, 'Maaf, Anda tidak memiliki izin untuk menggunakan perintah ini.');
     return res.status(200).json({ success: false, message: 'Unauthorized user.' });
   }
@@ -53,7 +59,7 @@ export default async function handler(req, res) {
 
   console.log(`[Webhook] Processing command from owner (${chatId}): ${text}`);
 
-  let responseMessage = 'Perintah tidak dikenal.'; // Default pesan jika tidak ada perintah yang cocok
+  let responseMessage = 'Perintah tidak dikenal.'; 
 
   if (text === '/start') {
     responseMessage = `
@@ -62,17 +68,17 @@ export default async function handler(req, res) {
 Berikut adalah daftar perintah yang bisa Anda gunakan:
 
 🔑 <b>Manajemen Access Key:</b>
-• /addkey [key_opsional] [public|private|both]
-  - Menambahkan Access Key baru. Jika [key_opsional] tidak diberikan, akan di-generate otomatis.
-  - [public|private|both]: Batasan tipe panel untuk key ini (default: both).
+• <code>/addkey [key_opsional] [public|private|both]</code>
+  - Menambahkan Access Key baru. Jika <code>[key_opsional]</code> tidak diberikan, akan di-generate otomatis.
+  - <code>[public|private|both]</code>: Batasan tipe panel untuk key ini (default: both).
   - Contoh: <code>/addkey</code>
   - Contoh: <code>/addkey myCustomKey private</code>
   - Contoh: <code>/addkey public</code>
 
-• /listkeys
+• <code>/listkeys</code>
   - Menampilkan semua Access Key yang terdaftar beserta status dan batasannya.
 
-• /removekey [key_yang_ingin_dihapus]
+• <code>/removekey [key_yang_ingin_dihapus]</code>
   - Menghapus Access Key tertentu dari database.
   - Contoh: <code>/removekey myCustomKey</code>
 
@@ -97,7 +103,6 @@ Panel Creator Anda: ${VERCEL_BASE_URL}
         }
     }
     
-    // Perbaikan: Jika customKey adalah string kosong setelah trim, jadikan undefined
     if (typeof customKey === 'string' && customKey.trim() === '') {
         customKey = undefined;
     }
@@ -187,7 +192,9 @@ Panel Creator Anda: ${VERCEL_BASE_URL}
         responseMessage = `Terjadi kesalahan internal saat menghapus Access Key: ${escapeHTML(error.message)}`;
       }
     }
-  } else {
+  }
+  // Tidak ada else if untuk /setstatus dan /createadmin di versi ini
+  else {
       console.log(`[Webhook] Unrecognized command: ${text}`);
       responseMessage = 'Perintah tidak dikenal. Ketik /start untuk melihat daftar perintah.';
   }
@@ -209,7 +216,7 @@ async function sendTelegramMessage(chatId, messageText) {
       body: JSON.stringify({
         chat_id: chatId,
         text: messageText,
-        parse_mode: 'HTML',
+        parse_mode: 'HTML', 
       }),
     });
     const data = await response.json();
@@ -219,4 +226,4 @@ async function sendTelegramMessage(chatId, messageText) {
   } catch (error) {
     console.error('Error sending message via Telegram API:', error);
   }
-}
+    }
