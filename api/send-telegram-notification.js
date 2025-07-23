@@ -14,7 +14,7 @@ export default async function handler(req, res) {
 
   // Ambil token bot dan chat ID dari Environment Variables Vercel
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-  const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+  const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_IDS;
 
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
     console.error('Telegram bot token or chat ID is not set in environment variables.');
