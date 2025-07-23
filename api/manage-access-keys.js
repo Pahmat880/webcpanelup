@@ -13,9 +13,9 @@ export default async function handler(req, res) {
     console.log('manage-access-keys.js: Connected to DB.');
     const collection = db.collection('accessKeys');
 
-    const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+    const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_IDS;
     const authorizeOwner = (ownerId) => {
-      return ownerId && ownerId.toString() === TELEGRAM_CHAT_ID.toString();
+      return ownerId && ownerId.toString() === TELEGRAM_CHAT_IDS.toString();
     };
 
     if (req.method === 'POST') {
