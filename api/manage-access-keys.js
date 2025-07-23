@@ -13,12 +13,13 @@ export default async function handler(req, res) {
     console.log('manage-access-keys.js: Connected to DB.');
     const collection = db.collection('accessKeys');
 
-    const TELEGRAM_CHAT_IDS = process.env.TELEGRAM_CHAT_IDS;
+    const TELEGRAM_CHAT_IDS = process.env.TELEGRAM_CHAT_IDS; // Ambil dari daftar ID
     const AUTHORIZED_ADMIN_IDS = TELEGRAM_CHAT_IDS ? TELEGRAM_CHAT_IDS.split(',').map(id => id.trim()) : [];
 
     // --- MODIFIKASI FUNGSI authorizeOwner ---
     const authorizeOwner = (ownerId) => {
-      // Pastikan ownerId tidak undefined/null dan merupakan string non-kosong
+      // Pastikan ownerId tidak undefined/null dan merupakan string non-kosong,
+      // lalu periksa apakah ID yang sudah di-trim ada di daftar admin yang diizinkan.
       return ownerId && typeof ownerId === 'string' && ownerId.trim() !== '' && AUTHORIZED_ADMIN_IDS.includes(ownerId.trim());
     };
     // --- AKHIR MODIFIKASI ---
@@ -27,7 +28,7 @@ export default async function handler(req, res) {
       const { key, createdByTelegramId, panelTypeRestriction } = req.body;
       console.log('manage-access-keys.js: Processing POST request.');
 
-      if (!authorizeOwner(createdByTelegramId)) {
+      if (!authorizeOwner(createdByTelegramId)) { // Ini yang menyebabkan error Unauthorized
         return res.status(403).json({ success: false, message: 'Unauthorized: Invalid or missing owner ID for key creation.' });
       }
 
@@ -85,7 +86,7 @@ export default async function handler(req, res) {
       } else {
         return res.status(404).json({ success: false, message: 'Access Key not found.' });
       }
-    } else {
+    } else { // Tidak ada PUT di sini karena fitur status dihapus
       console.log(`manage-access-keys.js: Unsupported method: ${req.method}`);
       return res.status(405).json({ success: false, message: 'Method Not Allowed.' });
     }
